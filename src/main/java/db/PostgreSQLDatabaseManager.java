@@ -14,7 +14,16 @@ public class PostgreSQLDatabaseManager implements DatabaseManager {
 
     @Override
     public void connect() throws DatabaseException {
+        try {
+            String url = System.getenv("DB_URL");
+            String user = System.getenv("DB_USER");
+            String pass = System.getenv("DB_PASS");
 
+            connection = DriverManager.getConnection(url, user, pass);
+            connection.setAutoCommit(false);
+        } catch (SQLException e) {
+            throw new DatabaseException("Failed to connect: " + e.getMessage());
+        }
     }
 
     @Override

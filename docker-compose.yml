@@ -1,0 +1,28 @@
+version: '3.8'
+services:
+  db:
+    image: postgres:15
+    container_name: exchange_db
+    environment:
+      POSTGRES_DB: matching_engine_db
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+    ports:
+      - "5432:5432"
+    volumes:
+      # Mount the init.sql so Postgres runs it on first startup.
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: exchange_app
+    ports:
+      - "12345:12345"
+    depends_on:
+      - db
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/matching_engine_db
+      DB_USER: myuser
+      DB_PASS: mypassword
