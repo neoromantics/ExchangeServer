@@ -15,21 +15,39 @@ public class PostgreSQLDatabaseManager implements DatabaseManager {
     @Override
     public void connect() throws DatabaseException {
         try {
-            String url = System.getenv("DB_URL");
-            String user = System.getenv("DB_USER");
-            String pass = System.getenv("DB_PASS");
+            String dbHost = System.getenv("DB_HOST");      // "db"
+            String dbPort = System.getenv("DB_PORT");      // "5432"
+            String dbName = System.getenv("DB_NAME");      // "exchange_test"
+            String dbUser = System.getenv("DB_USER");      // "myuser"
+            String dbPass = System.getenv("DB_PASSWORD");  // "mypassword"
 
-            connection = DriverManager.getConnection(url, user, pass);
-            connection.setAutoCommit(false);
+            if (dbHost == null) dbHost = "localhost";  // fallback if not in Docker
+            if (dbPort == null) dbPort = "5432";
+            if (dbName == null) dbName = "exchange_test";
+            if (dbUser == null) dbUser = "myuser";
+            if (dbPass == null) dbPass = "mypassword";
+
+            String jdbcUrl = "jdbc:postgresql://" + dbHost + ":" + dbPort + "/" + dbName;
+            connection = DriverManager.getConnection(jdbcUrl, dbUser, dbPass);
+
+            // Optionally setAutoCommit(false) if manual transaction control
+            connection.setAutoCommit(true);
+
         } catch (SQLException e) {
-            throw new DatabaseException("Failed to connect: " + e.getMessage());
+            throw new DatabaseException("Connect failed: " + e.getMessage());
         }
     }
 
+
     @Override
     public void disconnect() throws DatabaseException {
-
-    }
+        if (connection != null) {
+            try {
+                connection.close();
+            } catch (SQLException e) {
+                throw new DatabaseException("Disconnect failed: " + e.getMessage());
+            }
+        }    }
 
     @Override
     public void createAccount(String accountId, BigDecimal initialBalance) throws DatabaseException {

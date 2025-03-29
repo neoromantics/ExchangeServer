@@ -1,29 +1,20 @@
-# ---------------------------
-# Stage 1: Build with Maven
-# ---------------------------
-FROM maven:3.8.7-amazoncorretto-17 AS build
-
+FROM maven:3.8.7-amazoncorretto-17 as build
 WORKDIR /app
 
-# Copy pom.xml and source files into the container
-COPY pom.xml /app
-COPY src /app/src
+COPY pom.xml .
+RUN mvn dependency:go-offline
 
-# Build the application
+COPY src ./src
 RUN mvn clean package -DskipTests
 
-# -----------------------------------
-# Stage 2: Create a minimal runtime image
-# -----------------------------------
-FROM amazoncorretto:17-alpine3.17
+# Just to confirm the final JAR name
+RUN ls -l /app/target
 
+FROM amazoncorretto:17-alpine
 WORKDIR /app
 
-# Copy the JAR from the build stage
-COPY --from=build /app/target/ExchangeServer-1.0-SNAPSHOT.jar exchange-server.jar
+# Copy the single jar from target to app.jar
+COPY --from=build /app/target/*.jar app.jar
 
-# Expose the port your application uses (adjust as necessary, e.g., 12345)
-EXPOSE 12345
-
-# Run the application
-ENTRYPOINT ["java", "-jar", "exchange-server.jar"]
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "app.jar"]

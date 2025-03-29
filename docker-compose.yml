@@ -1,28 +1,28 @@
-version: '3.8'
 services:
   db:
     image: postgres:15
-    container_name: exchange_db
+    container_name: my_exchange_db
     environment:
-      POSTGRES_DB: matching_engine_db
       POSTGRES_USER: myuser
       POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: exchange_test
     ports:
       - "5432:5432"
     volumes:
-      # Mount the init.sql so Postgres runs it on first startup.
-      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - my_exchange_data:/var/lib/postgresql/data
+    # The above volume is optional if data persist across container restarts.
+    # omit the volume, the database will be ephemeral and reset whenever the container is destroyed.
 
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: exchange_app
-    ports:
-      - "12345:12345"
+    build: .
+    container_name: my_exchange_app
     depends_on:
       - db
-    environment:
-      DB_URL: jdbc:postgresql://db:5432/matching_engine_db
-      DB_USER: myuser
-      DB_PASS: mypassword
+    ports:
+      - "8080:8080"
+    # If your Java app listens on port 8080, it will be mapped to the host's 8080.
+    # If you only want to run the DB from Docker Compose and run the app on your host,
+    # you can remove the 'app' service and build the app normally via Maven/Gradle.
+
+volumes:
+  my_exchange_data:
