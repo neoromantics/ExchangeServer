@@ -1,7 +1,7 @@
 services:
   db:
     image: postgres:15
-    container_name: my_exchange_db
+    container_name: exchange_db
     environment:
       POSTGRES_USER: myuser
       POSTGRES_PASSWORD: mypassword
@@ -9,20 +9,10 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - my_exchange_data:/var/lib/postgresql/data
-    # The above volume is optional if data persist across container restarts.
-    # omit the volume, the database will be ephemeral and reset whenever the container is destroyed.
-
-  app:
-    build: .
-    container_name: my_exchange_app
-    depends_on:
-      - db
-    ports:
-      - "8080:8080"
-    # If your Java app listens on port 8080, it will be mapped to the host's 8080.
-    # If you only want to run the DB from Docker Compose and run the app on your host,
-    # you can remove the 'app' service and build the app normally via Maven/Gradle.
+      # Automatically run any SQL scripts placed here on first startup
+      - ./docker/db-scripts:/docker-entrypoint-initdb.d
+      # Persist database data across restarts
+      - exchange_db_data:/var/lib/postgresql/data
 
 volumes:
-  my_exchange_data:
+  exchange_db_data:

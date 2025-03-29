@@ -6,11 +6,13 @@ import java.util.Map;
 public class Account {
     private String accountId;
     private BigDecimal balance;
+    private Map<String, Position> positions;  // Optional, if you use it
 
-    // Positions keyed by symbol. Each Position tells how many shares of that symbol are owned.
-    private Map<String, Position> positions;
-
+    // Constructor that initializes accountId and balance
     public Account(String accountId, BigDecimal balance) {
+        this.accountId = accountId;
+        // Ensure balance is not null—if null, default to BigDecimal.ZERO.
+        this.balance = (balance != null) ? balance : BigDecimal.ZERO;
     }
 
     public String getAccountId() {
@@ -18,6 +20,7 @@ public class Account {
     }
 
     public void setAccountId(String accountId) {
+        this.accountId = accountId;
     }
 
     public BigDecimal getBalance() {
@@ -25,6 +28,7 @@ public class Account {
     }
 
     public void setBalance(BigDecimal balance) {
+        this.balance = balance;
     }
 
     public Map<String, Position> getPositions() {
@@ -32,5 +36,6 @@ public class Account {
     }
 
     public void setPositions(Map<String, Position> positions) {
+        this.positions = positions;
     }
 }
