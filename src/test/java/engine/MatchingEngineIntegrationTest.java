@@ -1,9 +1,7 @@
 package engine;
 
 import db.DatabaseException;
-import db.PostgreSQLDatabaseManager;
-import engine.MatchingEngineException;
-import engine.QueryResult;
+import db.PostgresDBManager;
 import model.Account;
 import model.Order;
 import model.OrderStatus;
@@ -16,19 +14,18 @@ import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.Statement;
 import java.time.Instant;
-import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 public class MatchingEngineIntegrationTest {
 
-    private PostgreSQLDatabaseManager dbManager;
+    private PostgresDBManager dbManager;
     private MatchingEngine engine;
 
     @BeforeEach
     public void setUp() throws DatabaseException {
         // Create a new instance of your DB manager per test and connect
-        dbManager = new PostgreSQLDatabaseManager();
+        dbManager = new PostgresDBManager();
         dbManager.connect();
         clearTables();
         engine = new MatchingEngine(dbManager);

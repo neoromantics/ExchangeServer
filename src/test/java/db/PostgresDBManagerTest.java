@@ -16,16 +16,16 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 //@TestInstance(TestInstance.Lifecycle.PER_CLASS)
-public class PostgreSQLDatabaseManagerTest {
+public class PostgresDBManagerTest {
 
     // 跑测试之前需要先打开数据库
     // 1. 启动docker
     // 2. Terminal里跑sudo docker compose up
-    private PostgreSQLDatabaseManager dbManager;
+    private PostgresDBManager dbManager;
 
     @BeforeEach
     public void setUp() throws DatabaseException {
-        dbManager = new PostgreSQLDatabaseManager();
+        dbManager = new PostgresDBManager();
         dbManager.connect();
         clearTables();
     }
@@ -69,6 +69,13 @@ public class PostgreSQLDatabaseManagerTest {
         BigDecimal balance = new BigDecimal("1000.00");
         dbManager.createAccount(accountId, balance);
         assertThrows(DatabaseException.class, () -> dbManager.createAccount(accountId, balance.add(BigDecimal.ONE)));
+        DatabaseException exception = assertThrows(
+                DatabaseException.class,
+                () -> dbManager.createAccount(accountId, balance.add(BigDecimal.ONE))
+        );
+
+        String message = exception.getMessage();
+        System.out.println("Exception message: " + message);
     }
 
     @Test

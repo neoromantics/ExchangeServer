@@ -9,10 +9,23 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      # Automatically run any SQL scripts placed here on first startup
       - ./docker/db-scripts:/docker-entrypoint-initdb.d
-      # Persist database data across restarts
       - exchange_db_data:/var/lib/postgresql/data
 
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: exchange_server
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: myuser
+      DB_PASSWORD: mypassword
+      DB_NAME: exchange_test
 volumes:
   exchange_db_data:

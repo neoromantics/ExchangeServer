@@ -11,7 +11,7 @@ import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
-public class PostgreSQLDatabaseManager implements DatabaseManager {
+public class PostgresDBManager implements DatabaseManager {
 
     private Connection connection;
     public Connection getConnection() {
