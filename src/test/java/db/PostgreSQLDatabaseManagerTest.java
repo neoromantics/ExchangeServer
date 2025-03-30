@@ -15,9 +15,12 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+//@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class PostgreSQLDatabaseManagerTest {
 
+    // 跑测试之前需要先打开数据库
+    // 1. 启动docker
+    // 2. Terminal里跑sudo docker compose up
     private PostgreSQLDatabaseManager dbManager;
 
     @BeforeEach
