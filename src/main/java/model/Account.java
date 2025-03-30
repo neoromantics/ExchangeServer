@@ -6,13 +6,15 @@ import java.util.Map;
 public class Account {
     private String accountId;
     private BigDecimal balance;
-    private Map<String, Position> positions;  // Optional, if you use it
+    private Map<String, Position> positions;
 
     // Constructor that initializes accountId and balance
     public Account(String accountId, BigDecimal balance) {
         this.accountId = accountId;
         // Ensure balance is not null—if null, default to BigDecimal.ZERO.
+//        this.balance = (balance != null) ? balance : BigDecimal.ZERO;
         this.balance = (balance != null) ? balance : BigDecimal.ZERO;
+
     }
 
     public String getAccountId() {

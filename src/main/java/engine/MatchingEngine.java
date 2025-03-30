@@ -1,5 +1,6 @@
 package engine;
 
+import java.math.RoundingMode;
 
 import db.DatabaseException;
 import db.DatabaseManager;
@@ -11,11 +12,8 @@ import model.Position;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.math.RoundingMode;
 
-/**
- * MatchingEngine that incrementally refunds leftover cost (for buys)
- * or pays out proceeds (for sells) after each partial fill.
- */
 public class MatchingEngine {
 
     private final DatabaseManager db;
@@ -240,37 +238,33 @@ public class MatchingEngine {
      * We'll do an immediate partial cost refund (if it's a buy) or partial proceeds payout (if it's a sell).
      * We'll also credit partial shares to a buyer, or confirm partial shares are removed from a seller.
      */
+
     private void partialFillPayout(Order order, BigDecimal matchedShares, BigDecimal execPrice)
             throws DatabaseException {
-
         Account acct = db.getAccount(order.getAccountId());
-        if (acct == null) return; // shouldn't happen if data is consistent
+        if (acct == null) return; // should not happen
 
-        // If it's a buy
+        // If it's a BUY order
         if (order.getAmount().compareTo(BigDecimal.ZERO) > 0) {
-            // 1) partial cost was actually "execPrice * matchedShares"
-            // 2) we withheld "limitPrice * matchedShares" for that portion
+            // Calculate the cost at the limit price for this partial fill.
             BigDecimal limitCost = order.getLimitPrice().multiply(matchedShares);
+            // Calculate the actual cost for the fill at the execution price.
             BigDecimal actualCost = execPrice.multiply(matchedShares);
-            BigDecimal diff = limitCost.subtract(actualCost);
-            // refund that difference immediately
+            // Calculate the difference, and round to 2 decimal places.
+            BigDecimal diff = limitCost.subtract(actualCost).setScale(2, RoundingMode.HALF_UP);
             if (diff.compareTo(BigDecimal.ZERO) > 0) {
+                // Immediately refund the difference.
                 acct.setBalance(acct.getBalance().add(diff));
                 db.updateAccount(acct);
             }
-            // also credit the matchedShares to the buyer's position
+            // Also credit the matched shares to the buyer's position.
             db.createOrAddSymbol(order.getSymbol(), acct.getAccountId(), matchedShares);
-
         } else {
-            // It's a sell
-            // We withheld matchedShares from the user
-            // Now that matchedShares are executed at execPrice, pay them out
+            // SELL order: pay out proceeds immediately.
             BigDecimal proceeds = execPrice.multiply(matchedShares);
             acct.setBalance(acct.getBalance().add(proceeds));
             db.updateAccount(acct);
-
-            // The shares are effectively consumed. We already withheld them at openOrder time,
-            // so we do NOT give them back.
         }
     }
+
 }

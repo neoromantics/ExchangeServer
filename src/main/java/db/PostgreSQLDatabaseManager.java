@@ -79,7 +79,6 @@ public class PostgreSQLDatabaseManager implements DatabaseManager {
                     String id = rs.getString("account_id");
                     BigDecimal bal = rs.getBigDecimal("balance");
                     Account acc = new Account(id, bal);
-                    // Optionally also load positions here
                     return acc;
                 }
                 return null;
@@ -203,7 +202,7 @@ public class PostgreSQLDatabaseManager implements DatabaseManager {
     }
 
     /**
-     * Update an existing order (e.g., status, creation time, etc.).
+     * Update an existing order
      */
     @Override
     public void updateOrder(Order order) throws DatabaseException {
