@@ -160,6 +160,10 @@ public class MatchingEngine {
             while (sharesRemaining.compareTo(BigDecimal.ZERO) > 0
                     && incomingOrder.getStatus() == OrderStatus.OPEN) {
 
+//                // Debug: Print matching loop status.
+//                System.out.println("Matching order " + incomingOrder.getOrderId()
+//                        + ", sharesRemaining: " + sharesRemaining);
+
                 // 1. get best opposite side order
                 List<Order> oppList = db.getOpenOrdersForSymbol(symbol, !isBuy);
                 if (oppList.isEmpty()) {
