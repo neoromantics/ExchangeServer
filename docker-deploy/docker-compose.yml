@@ -7,15 +7,15 @@ services:
       POSTGRES_PASSWORD: mypassword
       POSTGRES_DB: exchange_test
     ports:
-      - "5433:5432"
+      - "5432:5432"
     volumes:
-      - ./docker/db-scripts:/docker-entrypoint-initdb.d
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
       - exchange_db_data:/var/lib/postgresql/data
 
   server:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: src/Dockerfile
     container_name: exchange_server
     ports:
       - "8080:8080"
@@ -27,5 +27,6 @@ services:
       DB_USER: myuser
       DB_PASSWORD: mypassword
       DB_NAME: exchange_test
+
 volumes:
   exchange_db_data:
