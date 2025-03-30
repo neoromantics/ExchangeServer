@@ -7,6 +7,8 @@ public class Position {
     private BigDecimal quantity;
 
     public Position(String symbol, BigDecimal quantity) {
+        this.symbol = symbol;
+        this.quantity = quantity;
     }
 
     public String getSymbol() {
@@ -14,6 +16,7 @@ public class Position {
     }
 
     public void setSymbol(String symbol) {
+        this.symbol = symbol;
     }
 
     public BigDecimal getQuantity() {
@@ -21,5 +24,6 @@ public class Position {
     }
 
     public void setQuantity(BigDecimal quantity) {
+        this.quantity = quantity;
     }
 }

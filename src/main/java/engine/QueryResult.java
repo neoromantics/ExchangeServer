@@ -1,16 +1,38 @@
 package engine;
 
-import java.util.ArrayList;
+import model.OrderStatus;
+
+import java.math.BigDecimal;
 import java.util.List;
 
+/**
+ * Holds the result of a query for one order.
+ * Store status, how many shares remain open, and a list of partial fill records.
+ */
 public class QueryResult {
-    public static class ExecutionRecord {
-        public long shares;
-        public double price;
-        public long timestamp;
+
+    public final long orderId;
+    public final OrderStatus status;
+    public final BigDecimal openShares;  // how many remain unfilled
+    public final List<ExecutionRecord> executions;
+
+    public QueryResult(long orderId, OrderStatus status, BigDecimal openShares, List<ExecutionRecord> execs) {
+        this.orderId = orderId;
+        this.status = status;
+        this.openShares = openShares;
+        this.executions = execs;
     }
-    public long orderId;
-    public long openShares;
-    public boolean canceled;
-    public List<ExecutionRecord> executions = new ArrayList<>();
+
+    // Nested class to describe a single partial fill
+    public static class ExecutionRecord {
+        public final BigDecimal shares;
+        public final BigDecimal price;
+        public final long timestamp;
+
+        public ExecutionRecord(BigDecimal shares, BigDecimal price, long timestamp) {
+            this.shares = shares;
+            this.price = price;
+            this.timestamp = timestamp;
+        }
+    }
 }
