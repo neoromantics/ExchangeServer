@@ -55,6 +55,7 @@ public class RequestHandlerTest {
         doThrow(new DatabaseException("Duplicate account")).when(mockDb).createAccount(accountId, balance);
 
         String xml = handler.createAccount(accountId, balance);
+        System.out.println(xml);
 
         assertTrue(xml.contains("<error"));
         assertTrue(xml.contains("id=\"" + accountId + "\""));
@@ -92,7 +93,7 @@ public class RequestHandlerTest {
     }
 
     @Test
-    public void testOpenOrderSuccess() throws DatabaseException, MatchingEngineException {
+    public void testOpenOrderSuccess() throws MatchingEngineException {
         String accountId = "buyer1";
         String symbol = "XYZ";
         BigDecimal amount = new BigDecimal("100");
@@ -113,7 +114,7 @@ public class RequestHandlerTest {
     }
 
     @Test
-    public void testOpenOrderError() throws DatabaseException, MatchingEngineException {
+    public void testOpenOrderError() throws MatchingEngineException {
         String accountId = "buyerError";
         String symbol = "XYZ";
         BigDecimal amount = new BigDecimal("100");
@@ -132,7 +133,7 @@ public class RequestHandlerTest {
     }
 
     @Test
-    public void testCancelOrderSuccess() throws DatabaseException, MatchingEngineException {
+    public void testCancelOrderSuccess() throws MatchingEngineException {
         long orderId = 200L;
         // A dummy canceled order is created.
         Order canceledOrderDummy = new Order("dummy", "XYZ", new BigDecimal("100"), new BigDecimal("50.00"));
@@ -171,7 +172,7 @@ public class RequestHandlerTest {
     }
 
     @Test
-    public void testQueryOrderSuccess() throws DatabaseException, MatchingEngineException {
+    public void testQueryOrderSuccess() throws MatchingEngineException {
         long orderId = 400L;
         QueryResult qr = new QueryResult(orderId, OrderStatus.OPEN, new BigDecimal("100"), new ArrayList<>());
         when(mockEngine.queryOrder(orderId)).thenReturn(qr);
@@ -202,7 +203,7 @@ public class RequestHandlerTest {
     }
 
     @Test
-    public void testQueryOrderWithMultipleExecutions() throws DatabaseException, MatchingEngineException {
+    public void testQueryOrderWithMultipleExecutions() throws MatchingEngineException {
         long orderId = 600L;
         // A QueryResult with multiple execution records is simulated:
         // For example, 30 shares executed at 45.00 and 20 shares executed at 46.00,
@@ -232,7 +233,7 @@ public class RequestHandlerTest {
     }
 
     @Test
-    public void testCancelOrderWithPartialExecutions() throws DatabaseException, MatchingEngineException {
+    public void testCancelOrderWithPartialExecutions() throws  MatchingEngineException {
         long orderId = 700L;
         // A BUY order that is partially filled is simulated.
         Order dummyOrder = new Order("buyerX", "XYZ", new BigDecimal("100"), new BigDecimal("50.00"));
@@ -353,10 +354,6 @@ public class RequestHandlerTest {
         assertTrue(result.contains("<results>"));
         assertTrue(result.contains("<error id=\"acct100\">Duplicate account</error>"));
     }
-
-    // ===============================
-    // processTransactions tests
-    // ===============================
 
     @Test
     public void testProcessTransactionsInvalidAccount() throws DatabaseException {

@@ -1,7 +1,7 @@
 package server;
 
 import db.DatabaseManager;
-import db.PostgreSQLDatabaseManager;
+import db.PostgresDBManager;
 import engine.MatchingEngine;
 
 import java.io.IOException;
@@ -45,7 +45,7 @@ public class ExchangeServer {
 
     public static void main(String[] args) throws Exception {
         // 1) connect DB
-        DatabaseManager db = new PostgreSQLDatabaseManager();
+        DatabaseManager db = new PostgresDBManager();
         db.connect();
 
         // 2) create engine
