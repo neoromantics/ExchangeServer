@@ -61,6 +61,14 @@ public class PostgreSQLDatabaseManagerTest {
     }
 
     @Test
+    public void testCreateRepetitiveAccount() throws DatabaseException {
+        String accountId = "acct1";
+        BigDecimal balance = new BigDecimal("1000.00");
+        dbManager.createAccount(accountId, balance);
+        assertThrows(DatabaseException.class, () -> dbManager.createAccount(accountId, balance.add(BigDecimal.ONE)));
+    }
+
+    @Test
     public void testUpdateAccount() throws DatabaseException {
         String accountId = "acct1";
         BigDecimal balance = new BigDecimal("1000.00");

@@ -44,7 +44,7 @@ public class RequestHandler {
                 db.createAccount(accountId, initialBalance);
                 rootEl = doc.createElement("created");
                 rootEl.setAttribute("id", accountId);
-                rootEl.setAttribute("balance", initialBalance.toPlainString());
+//                rootEl.setAttribute("balance", initialBalance.toPlainString());
             } catch (DatabaseException ex) {
                 rootEl = doc.createElement("error");
                 rootEl.setAttribute("id", accountId);
