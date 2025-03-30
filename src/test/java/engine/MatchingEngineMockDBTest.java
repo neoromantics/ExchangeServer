@@ -7,7 +7,6 @@ import model.Order;
 import model.OrderStatus;
 import model.Position;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -20,7 +19,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-public class MatchingEngineTest {
+public class MatchingEngineMockDBTest {
 
     private DatabaseManager mockDb;
     private MatchingEngine engine;
