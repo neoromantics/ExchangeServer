@@ -8,13 +8,11 @@ public class Account {
     private BigDecimal balance;
     private Map<String, Position> positions;
 
-    // Constructor that initializes accountId and balance
+    // Constructor that initializes accountId and balance.
+    // If balance is null, it defaults to BigDecimal.ZERO.
     public Account(String accountId, BigDecimal balance) {
         this.accountId = accountId;
-        // Ensure balance is not null—if null, default to BigDecimal.ZERO.
-//        this.balance = (balance != null) ? balance : BigDecimal.ZERO;
         this.balance = (balance != null) ? balance : BigDecimal.ZERO;
-
     }
 
     public String getAccountId() {

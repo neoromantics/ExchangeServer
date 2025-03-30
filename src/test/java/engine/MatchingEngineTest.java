@@ -244,7 +244,7 @@ public class MatchingEngineTest {
     }
 
     /**
-     * Test case: If we attempt to cancel an order that is not OPEN (e.g., already EXECUTED),
+     * Test case: If attempt to cancel an order that is not OPEN (e.g., already EXECUTED),
      * the MatchingEngine should throw a MatchingEngineException.
      */
     @Test
@@ -332,7 +332,7 @@ public class MatchingEngineTest {
 
         // At this point, our matching logic should have fully matched the buyer order.
         // However, our mock doesn't automatically record executions.
-        // We need to simulate that 100 shares were executed.
+        // Need to simulate that 100 shares were executed.
         List<QueryResult.ExecutionRecord> buyerExecs = new ArrayList<>();
         buyerExecs.add(new QueryResult.ExecutionRecord(new BigDecimal("100"), new BigDecimal("45.00"), Instant.now().getEpochSecond()));
         when(mockDb.getExecutionsForOrder(5L)).thenReturn(buyerExecs);
@@ -425,7 +425,6 @@ public class MatchingEngineTest {
         // Round 2 refund: 100*(50 - 47) = 300.
         // Total refund = 800.
         // Final balance = 10000 - 10000 + 800 = 800.
-        // (If your design holds the full cost and refunds incrementally.)
         assertEquals(0, buyerAccount.getBalance().compareTo(new BigDecimal("800.00")));
 
         // Stub executions: For buyer order, simulate that 200 shares executed in two rounds.

@@ -90,8 +90,8 @@ public class MatchingEngine {
             ord.setStatus(OrderStatus.CANCELED);
             db.updateOrder(ord);
 
-            // We withheld full cost/shares at open, but we've been adjusting incrementally after each fill
-            // The unfilled portion remains withheld, so we must now return it.
+            // Withheld full cost/shares at open, but have been adjusting incrementally after each fill
+            // The unfilled portion remains withheld, so must now return it.
             BigDecimal totalExec = db.getTotalExecutedShares(orderId);
             BigDecimal original = ord.getAmount().abs();
             BigDecimal leftover = original.subtract(totalExec);
@@ -210,10 +210,10 @@ public class MatchingEngine {
                 } else {
                     // partially filled candidate => remains open
                     // reduce its "amount" in the DB or re-insert some leftover logic
-                    // Typically we keep the same order row. We can't just update "orders.amount" directly,
-                    // or we might lose the original total.
+                    // Typically keep the same order row. Can't just update "orders.amount" directly,
+                    // or might lose the original total.
                     // But for simplicity, let's just store the original amount and rely on 'executions' to see how many are left.
-                    // We'll do immediate partial payout anyway:
+                    // Will do immediate partial payout anyway:
                     partialFillPayout(candidate, matchedShares, execPrice);
                 }
 
@@ -235,8 +235,8 @@ public class MatchingEngine {
 
     /**
      * Do the partial fill logic for the order that just matched matchedShares at execPrice.
-     * We'll do an immediate partial cost refund (if it's a buy) or partial proceeds payout (if it's a sell).
-     * We'll also credit partial shares to a buyer, or confirm partial shares are removed from a seller.
+     * Will do an immediate partial cost refund (if it's a buy) or partial proceeds payout (if it's a sell).
+     * Will also credit partial shares to a buyer, or confirm partial shares are removed from a seller.
      */
 
     private void partialFillPayout(Order order, BigDecimal matchedShares, BigDecimal execPrice)
