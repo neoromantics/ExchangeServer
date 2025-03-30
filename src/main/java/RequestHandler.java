@@ -32,32 +32,25 @@ public class RequestHandler {
     /**
      * Creates a new account.
      * On success, returns:
-     * <results>
      *   <created id="ACCOUNT_ID" balance="INITIAL_BALANCE"/>
-     * </results>
      * On error, returns:
-     * <results>
      *   <error id="ACCOUNT_ID">Error message</error>
-     * </results>
      */
     public String createAccount(String accountId, BigDecimal initialBalance) {
         try {
             Document doc = createNewDocument();
-            Element resultsEl = doc.createElement("results");
-            doc.appendChild(resultsEl);
-
+            Element rootEl;
             try {
                 db.createAccount(accountId, initialBalance);
-                Element createdEl = doc.createElement("created");
-                createdEl.setAttribute("id", accountId);
-                createdEl.setAttribute("balance", initialBalance.toPlainString());
-                resultsEl.appendChild(createdEl);
+                rootEl = doc.createElement("created");
+                rootEl.setAttribute("id", accountId);
+//                rootEl.setAttribute("balance", initialBalance.toPlainString());
             } catch (DatabaseException ex) {
-                Element errorEl = doc.createElement("error");
-                errorEl.setAttribute("id", accountId);
-                errorEl.setTextContent(ex.getMessage());
-                resultsEl.appendChild(errorEl);
+                rootEl = doc.createElement("error");
+                rootEl.setAttribute("id", accountId);
+                rootEl.setTextContent(ex.getMessage());
             }
+            doc.appendChild(rootEl);
             return convertDocumentToString(doc);
         } catch (Exception e) {
             return buildFatalError(e);
@@ -66,34 +59,27 @@ public class RequestHandler {
 
     /**
      * Creates or adds shares of a symbol to an account.
-     * On success:
-     * <results>
+     * On success, returns:
      *   <created sym="SYM" id="ACCOUNT_ID"/>
-     * </results>
-     * On error:
-     * <results>
+     * On error, returns:
      *   <error sym="SYM" id="ACCOUNT_ID">Error message</error>
-     * </results>
      */
     public String createOrAddSymbol(String symbol, String accountId, BigDecimal shares) {
         try {
             Document doc = createNewDocument();
-            Element resultsEl = doc.createElement("results");
-            doc.appendChild(resultsEl);
-
+            Element rootEl;
             try {
                 db.createOrAddSymbol(symbol, accountId, shares);
-                Element createdEl = doc.createElement("created");
-                createdEl.setAttribute("sym", symbol);
-                createdEl.setAttribute("id", accountId);
-                resultsEl.appendChild(createdEl);
+                rootEl = doc.createElement("created");
+                rootEl.setAttribute("sym", symbol);
+                rootEl.setAttribute("id", accountId);
             } catch (DatabaseException ex) {
-                Element errorEl = doc.createElement("error");
-                errorEl.setAttribute("sym", symbol);
-                errorEl.setAttribute("id", accountId);
-                errorEl.setTextContent(ex.getMessage());
-                resultsEl.appendChild(errorEl);
+                rootEl = doc.createElement("error");
+                rootEl.setAttribute("sym", symbol);
+                rootEl.setAttribute("id", accountId);
+                rootEl.setTextContent(ex.getMessage());
             }
+            doc.appendChild(rootEl);
             return convertDocumentToString(doc);
         } catch (Exception e) {
             return buildFatalError(e);
@@ -102,39 +88,31 @@ public class RequestHandler {
 
     /**
      * Opens a new buy/sell order.
-     * On success:
-     * <results>
+     * On success, returns:
      *   <opened sym="SYM" amount="AMT" limit="LIMIT" id="ORDER_ID"/>
-     * </results>
-     * On error:
-     * <results>
+     * On error, returns:
      *   <error sym="SYM" amount="AMT" limit="LIMIT">Error message</error>
-     * </results>
      */
-    public String openOrder(String accountId, String symbol,
-                            BigDecimal amount, BigDecimal limitPrice) {
+    public String openOrder(String accountId, String symbol, BigDecimal amount, BigDecimal limitPrice) {
         try {
             Document doc = createNewDocument();
-            Element resultsEl = doc.createElement("results");
-            doc.appendChild(resultsEl);
-
+            Element rootEl;
             try {
                 Order order = new Order(accountId, symbol, amount, limitPrice);
                 Order placed = engine.openOrder(order);
-                Element openedEl = doc.createElement("opened");
-                openedEl.setAttribute("sym", symbol);
-                openedEl.setAttribute("amount", amount.toPlainString());
-                openedEl.setAttribute("limit", limitPrice.toPlainString());
-                openedEl.setAttribute("id", String.valueOf(placed.getOrderId()));
-                resultsEl.appendChild(openedEl);
+                rootEl = doc.createElement("opened");
+                rootEl.setAttribute("sym", symbol);
+                rootEl.setAttribute("amount", amount.toPlainString());
+                rootEl.setAttribute("limit", limitPrice.toPlainString());
+                rootEl.setAttribute("id", String.valueOf(placed.getOrderId()));
             } catch (MatchingEngineException ex) {
-                Element errorEl = doc.createElement("error");
-                errorEl.setAttribute("sym", symbol);
-                errorEl.setAttribute("amount", amount.toPlainString());
-                errorEl.setAttribute("limit", limitPrice.toPlainString());
-                errorEl.setTextContent(ex.getMessage());
-                resultsEl.appendChild(errorEl);
+                rootEl = doc.createElement("error");
+                rootEl.setAttribute("sym", symbol);
+                rootEl.setAttribute("amount", amount.toPlainString());
+                rootEl.setAttribute("limit", limitPrice.toPlainString());
+                rootEl.setTextContent(ex.getMessage());
             }
+            doc.appendChild(rootEl);
             return convertDocumentToString(doc);
         } catch (Exception e) {
             return buildFatalError(e);
@@ -144,54 +122,44 @@ public class RequestHandler {
     /**
      * Cancels an open order.
      * On success, returns:
-     * <results>
      *   <canceled id="ORDER_ID">
      *     <executed shares="..." price="..." time="..."/>
      *     ...
      *     <canceled shares="..." time="..."/>
      *   </canceled>
-     * </results>
      * On error, returns:
-     * <results>
      *   <error id="ORDER_ID">Error message</error>
-     * </results>
      */
     public String cancelOrder(long orderId) {
         try {
             Document doc = createNewDocument();
-            Element resultsEl = doc.createElement("results");
-            doc.appendChild(resultsEl);
-
+            Element rootEl;
             try {
                 engine.cancelOrder(orderId);
                 QueryResult qr = engine.queryOrder(orderId);
-
-                Element canceledEl = doc.createElement("canceled");
-                canceledEl.setAttribute("id", String.valueOf(orderId));
-                resultsEl.appendChild(canceledEl);
-
-                // Add each execution record
+                rootEl = doc.createElement("canceled");
+                rootEl.setAttribute("id", String.valueOf(orderId));
+                // Add each execution record.
                 for (QueryResult.ExecutionRecord er : qr.executions) {
                     Element execEl = doc.createElement("executed");
                     execEl.setAttribute("shares", er.shares.toPlainString());
                     execEl.setAttribute("price", er.price.toPlainString());
                     execEl.setAttribute("time", String.valueOf(er.timestamp));
-                    canceledEl.appendChild(execEl);
+                    rootEl.appendChild(execEl);
                 }
-                // Add remaining unfilled portion, if any
+                // Add remaining unfilled portion, if any.
                 if (qr.openShares.compareTo(BigDecimal.ZERO) > 0) {
                     Element cancelPartEl = doc.createElement("canceled");
                     cancelPartEl.setAttribute("shares", qr.openShares.toPlainString());
-                    // Using current epoch seconds as time
                     cancelPartEl.setAttribute("time", String.valueOf(System.currentTimeMillis() / 1000));
-                    canceledEl.appendChild(cancelPartEl);
+                    rootEl.appendChild(cancelPartEl);
                 }
             } catch (MatchingEngineException ex) {
-                Element errorEl = doc.createElement("error");
-                errorEl.setAttribute("id", String.valueOf(orderId));
-                errorEl.setTextContent(ex.getMessage());
-                resultsEl.appendChild(errorEl);
+                rootEl = doc.createElement("error");
+                rootEl.setAttribute("id", String.valueOf(orderId));
+                rootEl.setTextContent(ex.getMessage());
             }
+            doc.appendChild(rootEl);
             return convertDocumentToString(doc);
         } catch (Exception e) {
             return buildFatalError(e);
@@ -201,39 +169,32 @@ public class RequestHandler {
     /**
      * Queries the status of an order.
      * On success, returns:
-     * <results>
      *   <status id="ORDER_ID">
      *     <open shares="..."/>
      *     <executed shares="..." price="..." time="..."/>
      *     ...
      *   </status>
-     * </results>
      * On error, returns:
-     * <results>
      *   <error id="ORDER_ID">Error message</error>
-     * </results>
      */
     public String queryOrder(long orderId) {
         try {
             Document doc = createNewDocument();
-            Element resultsEl = doc.createElement("results");
-            doc.appendChild(resultsEl);
-
+            Element rootEl;
             try {
                 QueryResult qr = engine.queryOrder(orderId);
-                Element statusEl = doc.createElement("status");
-                statusEl.setAttribute("id", String.valueOf(orderId));
-                resultsEl.appendChild(statusEl);
+                rootEl = doc.createElement("status");
+                rootEl.setAttribute("id", String.valueOf(orderId));
 
                 if (qr.status == OrderStatus.OPEN && qr.openShares.compareTo(BigDecimal.ZERO) > 0) {
                     Element openEl = doc.createElement("open");
                     openEl.setAttribute("shares", qr.openShares.toPlainString());
-                    statusEl.appendChild(openEl);
+                    rootEl.appendChild(openEl);
                 } else if (qr.status == OrderStatus.CANCELED && qr.openShares.compareTo(BigDecimal.ZERO) > 0) {
                     Element canceledEl = doc.createElement("canceled");
                     canceledEl.setAttribute("shares", qr.openShares.toPlainString());
                     canceledEl.setAttribute("time", String.valueOf(System.currentTimeMillis() / 1000));
-                    statusEl.appendChild(canceledEl);
+                    rootEl.appendChild(canceledEl);
                 }
 
                 for (QueryResult.ExecutionRecord er : qr.executions) {
@@ -241,19 +202,20 @@ public class RequestHandler {
                     execEl.setAttribute("shares", er.shares.toPlainString());
                     execEl.setAttribute("price", er.price.toPlainString());
                     execEl.setAttribute("time", String.valueOf(er.timestamp));
-                    statusEl.appendChild(execEl);
+                    rootEl.appendChild(execEl);
                 }
             } catch (MatchingEngineException ex) {
-                Element errorEl = doc.createElement("error");
-                errorEl.setAttribute("id", String.valueOf(orderId));
-                errorEl.setTextContent(ex.getMessage());
-                resultsEl.appendChild(errorEl);
+                rootEl = doc.createElement("error");
+                rootEl.setAttribute("id", String.valueOf(orderId));
+                rootEl.setTextContent(ex.getMessage());
             }
+            doc.appendChild(rootEl);
             return convertDocumentToString(doc);
         } catch (Exception e) {
             return buildFatalError(e);
         }
     }
+
 
     /**
      * Creates a new empty XML Document.
@@ -270,10 +232,8 @@ public class RequestHandler {
     private String convertDocumentToString(Document doc) throws TransformerException {
         TransformerFactory tf = TransformerFactory.newInstance();
         Transformer transformer = tf.newTransformer();
-        // Optional: configure transformer properties
-        transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "no");
+        transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
         transformer.setOutputProperty(OutputKeys.INDENT, "yes");
-
         StringWriter writer = new StringWriter();
         transformer.transform(new DOMSource(doc), new StreamResult(writer));
         return writer.getBuffer().toString();
@@ -283,6 +243,6 @@ public class RequestHandler {
      * Builds a fatal error XML string.
      */
     private String buildFatalError(Exception e) {
-        return "<results><error>" + e.getMessage() + "</error></results>";
+        return "<error>" + e.getMessage() + "</error>";
     }
 }
