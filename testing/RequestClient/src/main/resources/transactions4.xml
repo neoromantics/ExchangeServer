@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<transactions id="acct001">
+    <order sym="XYZ" amount="200" limit="55.00"/>
+    <query id="2001"/>
+    <cancel id="2002"/>
+</transactions>

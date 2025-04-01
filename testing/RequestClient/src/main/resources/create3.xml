@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<create>
+    <account id="acct003" balance="3000"/>
+    <account id="acct004" balance="4000"/>
+    <symbol sym="LMN">
+        <account id="acct003">1000</account>
+        <account id="acct004">1500</account>
+    </symbol>
+</create>
