@@ -10,13 +10,32 @@ import java.math.BigDecimal;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
 
 public class PostgresDBManager implements DatabaseManager {
 
-    private Connection connection;
-    public Connection getConnection() {
-        return connection;
+    private HikariDataSource dataSource;
+    
+    public PostgresDBManager() {
     }
+
+    public PostgresDBManager(HikariDataSource dataSource) {
+        this.dataSource = dataSource;
+    }
+
+    // public Connection getConnection() {
+    //     return connection;
+    // }
+
+    public Connection getConnection(){
+        try {
+            return dataSource.getConnection();
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to get DB connection", e);
+        }
+    }
+
     @Override
     public void connect() throws DatabaseException {
         try {
@@ -33,13 +52,27 @@ public class PostgresDBManager implements DatabaseManager {
             if (dbName == null) dbName = "exchange_test";
             if (dbUser == null) dbUser = "myuser";
             if (dbPass == null) dbPass = "mypassword";
-
+            
+            // 配置连接池参数
+            HikariConfig config = new HikariConfig();
             String jdbcUrl = "jdbc:postgresql://" + dbHost + ":" + dbPort + "/" + dbName;
+            config.setJdbcUrl(jdbcUrl);
+            config.setUsername(dbUser);
+            config.setPassword(dbPass);
+            
+            // 根据需要配置其他连接池参数，比如连接池大小
+            config.setMaximumPoolSize(10);
+            config.setAutoCommit(true);
+            
+            // 初始化连接池
+            dataSource = new HikariDataSource(config);
 
-            connection = DriverManager.getConnection(jdbcUrl, dbUser, dbPass);
-            connection.setAutoCommit(true);
+            // String jdbcUrl = "jdbc:postgresql://" + dbHost + ":" + dbPort + "/" + dbName;
 
-        } catch (SQLException e) {
+            // connection = DriverManager.getConnection(jdbcUrl, dbUser, dbPass);
+            // connection.setAutoCommit(true);
+
+        } catch (Exception e) {
             throw new DatabaseException("Failed to connect: " + e.getMessage());
         }
     }
@@ -47,11 +80,18 @@ public class PostgresDBManager implements DatabaseManager {
 
     @Override
     public void disconnect() throws DatabaseException {
-        if (connection != null) {
+        // if (connection != null) {
+        //     try {
+        //         connection.close();
+        //     } catch (SQLException e) {
+        //         throw new DatabaseException("Failed to disconnect: " + e.getMessage());
+        //     }
+        // }
+        if (dataSource != null) {
             try {
-                connection.close();
-            } catch (SQLException e) {
-                throw new DatabaseException("Failed to disconnect: " + e.getMessage());
+                dataSource.close();
+            } catch (Exception e) {
+                throw new DatabaseException("disconnect: Failed to close connection pool - " + e.getMessage());
             }
         }
     }
@@ -59,7 +99,9 @@ public class PostgresDBManager implements DatabaseManager {
     @Override
     public void createAccount(String accountId, BigDecimal initialBalance) throws DatabaseException {
         String sql = "INSERT INTO accounts (account_id, balance) VALUES (?, ?)";
-        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+        // try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+        try (Connection connection = getConnection();
+             PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setString(1, accountId);
             stmt.setBigDecimal(2, initialBalance);
             stmt.executeUpdate();
@@ -72,7 +114,9 @@ public class PostgresDBManager implements DatabaseManager {
     @Override
     public Account getAccount(String accountId) throws DatabaseException {
         String sql = "SELECT account_id, balance FROM accounts WHERE account_id = ?";
-        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+        //try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+        try (Connection connection = getConnection();
+            PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setString(1, accountId);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
@@ -91,7 +135,9 @@ public class PostgresDBManager implements DatabaseManager {
     @Override
     public void updateAccount(Account account) throws DatabaseException {
         String sql = "UPDATE accounts SET balance = ? WHERE account_id = ?";
-        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+        //try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+        try (Connection connection = getConnection();
+            PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setBigDecimal(1, account.getBalance());
             stmt.setString(2, account.getAccountId());
             stmt.executeUpdate();
@@ -104,7 +150,9 @@ public class PostgresDBManager implements DatabaseManager {
     public void createOrAddSymbol(String symbol, String accountId, BigDecimal shares) throws DatabaseException {
         // Check if positions row already exists
         String selectPos = "SELECT quantity FROM positions WHERE account_id=? AND symbol=?";
-        try (PreparedStatement stmt = connection.prepareStatement(selectPos)) {
+        //try (PreparedStatement stmt = connection.prepareStatement(selectPos)) {
+        try (Connection connection = getConnection();
+            PreparedStatement stmt = connection.prepareStatement(selectPos)) {
             stmt.setString(1, accountId);
             stmt.setString(2, symbol);
             try (ResultSet rs = stmt.executeQuery()) {
@@ -151,7 +199,9 @@ public class PostgresDBManager implements DatabaseManager {
     public long createOrder(Order order) throws DatabaseException {
         String sql = "INSERT INTO orders (account_id, symbol, amount, limit_price, status, creation_time) "
                 + "VALUES (?, ?, ?, ?, ?, ?) RETURNING order_id";
-        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+        //try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+        try (Connection connection = getConnection();
+            PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setString(1, order.getAccountId());
             stmt.setString(2, order.getSymbol());
             stmt.setBigDecimal(3, order.getAmount());
@@ -179,7 +229,9 @@ public class PostgresDBManager implements DatabaseManager {
     public Order getOrder(long orderId) throws DatabaseException {
         String sql = "SELECT account_id, symbol, amount, limit_price, status, creation_time "
                 + "FROM orders WHERE order_id=?";
-        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+        //try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+        try (Connection connection = getConnection();
+            PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setLong(1, orderId);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
@@ -209,7 +261,9 @@ public class PostgresDBManager implements DatabaseManager {
         String sql = "UPDATE orders "
                 + "SET account_id=?, symbol=?, amount=?, limit_price=?, status=?, creation_time=? "
                 + "WHERE order_id=?";
-        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+        //try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+        try (Connection connection = getConnection();
+            PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setString(1, order.getAccountId());
             stmt.setString(2, order.getSymbol());
             stmt.setBigDecimal(3, order.getAmount());
@@ -241,7 +295,9 @@ public class PostgresDBManager implements DatabaseManager {
                 + orderByClause;
 
         List<Order> list = new ArrayList<>();
-        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+        //try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+        try (Connection connection = getConnection();
+            PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setString(1, symbol);
             stmt.setBoolean(2, isBuySide);
             stmt.setBoolean(3, isBuySide);
@@ -271,7 +327,9 @@ public class PostgresDBManager implements DatabaseManager {
     public void insertExecution(long orderId, BigDecimal shares, BigDecimal price, long timestamp)
             throws DatabaseException {
         String sql = "INSERT INTO executions (order_id, shares, price, exec_time) VALUES (?, ?, ?, ?)";
-        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+        //try (PreparedStatement ps = connection.prepareStatement(sql)) {
+        try (Connection connection = getConnection();
+            PreparedStatement ps = connection.prepareStatement(sql)) {
             ps.setLong(1, orderId);
             ps.setBigDecimal(2, shares);
             ps.setBigDecimal(3, price);
@@ -288,7 +346,9 @@ public class PostgresDBManager implements DatabaseManager {
     @Override
     public BigDecimal getTotalExecutedShares(long orderId) throws DatabaseException {
         String sql = "SELECT COALESCE(SUM(shares), 0) AS total_filled FROM executions WHERE order_id=?";
-        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+        //try (PreparedStatement ps = connection.prepareStatement(sql)) {
+        try (Connection connection = getConnection();
+            PreparedStatement ps = connection.prepareStatement(sql)) {
             ps.setLong(1, orderId);
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
@@ -313,7 +373,9 @@ public class PostgresDBManager implements DatabaseManager {
                 + "ORDER BY exec_time ASC";
 
         List<QueryResult.ExecutionRecord> result = new ArrayList<>();
-        try (PreparedStatement ps = connection.prepareStatement(sql)) {
+        // try (PreparedStatement ps = connection.prepareStatement(sql)) {
+        try (Connection connection = getConnection();
+            PreparedStatement ps = connection.prepareStatement(sql)) {
             ps.setLong(1, orderId);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
@@ -332,7 +394,9 @@ public class PostgresDBManager implements DatabaseManager {
     // Get position:
     public Position getPosition(String accountId, String symbol) throws DatabaseException {
         String sql = "SELECT quantity FROM positions WHERE account_id=? AND symbol=?";
-        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+        //try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+        try (Connection connection = getConnection();
+            PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setString(1, accountId);
             stmt.setString(2, symbol);
             try (ResultSet rs = stmt.executeQuery()) {
@@ -350,7 +414,9 @@ public class PostgresDBManager implements DatabaseManager {
 
     public void updatePosition(String accountId, String symbol, BigDecimal newQuantity) throws DatabaseException {
         String sql = "UPDATE positions SET quantity=? WHERE account_id=? AND symbol=?";
-        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+        //try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+        try (Connection connection = getConnection();
+            PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setBigDecimal(1, newQuantity);
             stmt.setString(2, accountId);
             stmt.setString(3, symbol);
