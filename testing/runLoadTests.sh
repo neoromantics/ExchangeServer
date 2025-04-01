@@ -9,9 +9,14 @@ PORT="12345"
 # Define an array of XML file names relative to the RequestClient/src/main/resources directory.
 EXAMPLES=(
     "create1.xml"
-    # "create2.xml"
-    # "transactions1.xml"
-    # "cancel1.xml"
+    "create2.xml"
+    "transactions1.xml"
+    "transactions2.xml"
+    "transactions3.xml"
+    "query1.xml"
+    "cancel1.xml"
+    "transactions4.xml"
+    "create3.xml"
 )
 
 # Determine the number of client instances to launch.
