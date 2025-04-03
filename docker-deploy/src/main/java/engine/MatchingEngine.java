@@ -29,8 +29,11 @@ public class MatchingEngine {
      */
     public Order openOrder(Order order) throws MatchingEngineException {
         try {
-            // 1. Validate the account
-            Account acct = db.getAccount(order.getAccountId());
+            // 0. 开启事务，确保整个过程原子化
+            db.beginTransaction();
+
+            // 1. 使用 FOR UPDATE 锁定账户数据
+            Account acct = db.getAccountForUpdate(order.getAccountId());
             if (acct == null) {
                 throw new MatchingEngineException("Account not found: " + order.getAccountId());
             }
@@ -66,8 +69,15 @@ public class MatchingEngine {
             // 3. Attempt to match
             matchOrders(order);
 
+            // 4. 提交事务！！
+            db.commitTransaction();
             return order;
         } catch (DatabaseException e) {
+            try {
+                db.rollbackTransaction();
+            } catch (DatabaseException ex) {
+                throw new MatchingEngineException("Rollback Error: " + ex.getMessage());
+            }
             throw new MatchingEngineException("DB Error: " + e.getMessage());
         }
     }
@@ -77,7 +87,8 @@ public class MatchingEngine {
      */
     public Order cancelOrder(long orderId) throws MatchingEngineException {
         try {
-            Order ord = db.getOrder(orderId);
+            db.beginTransaction();
+            Order ord = db.getOrderForUpdate(orderId);
             if (ord == null) {
                 throw new MatchingEngineException("Order not found: " + orderId);
             }
@@ -114,14 +125,21 @@ public class MatchingEngine {
                 }
             }
 
+            db.commitTransaction();
             return ord;
         } catch (DatabaseException e) {
-            throw new MatchingEngineException("DB error: " + e.getMessage());
+            try {
+                db.rollbackTransaction();
+            } catch (DatabaseException ex) {
+                throw new MatchingEngineException("Rollback Error: " + ex.getMessage());
+            }
+            throw new MatchingEngineException("DB Error: " + e.getMessage());
         }
     }
 
     /**
      * Query an order, returning open/executed/canceled shares, partial fills, etc.
+     * 不需要进行事务管理+行锁
      */
     public QueryResult queryOrder(long orderId) throws MatchingEngineException {
         try {

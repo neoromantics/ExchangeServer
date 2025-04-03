@@ -17,6 +17,9 @@ public class PostgresDBManager implements DatabaseManager {
 
     private HikariDataSource dataSource;
     
+    // 用于存放当前线程内的事务连接
+    private ThreadLocal<Connection> transactionalConnection = new ThreadLocal<>();
+
     public PostgresDBManager() {
     }
 
@@ -28,11 +31,85 @@ public class PostgresDBManager implements DatabaseManager {
     //     return connection;
     // }
 
+    // public Connection getConnection(){
+    //     try {
+    //         return dataSource.getConnection();
+    //     } catch (SQLException e) {
+    //         throw new RuntimeException("Failed to get DB connection", e);
+    //     }
+    // }
+
+    /**
+     * 如果当前线程已经有事务连接，则返回该连接；否则从连接池获取新连接。
+     */
     public Connection getConnection(){
+        Connection conn = transactionalConnection.get();
+        if (conn != null) {
+            return conn;
+        }
         try {
             return dataSource.getConnection();
         } catch (SQLException e) {
             throw new RuntimeException("Failed to get DB connection", e);
+        }
+    }
+    
+    // 事务管理方法
+    /**
+     * 开始一个事务。事务内的所有数据库操作将复用同一个连接。
+     */
+    @Override
+    public void beginTransaction() throws DatabaseException {
+        try {
+            Connection conn = dataSource.getConnection();
+            conn.setAutoCommit(false);
+            transactionalConnection.set(conn);
+        } catch (SQLException e) {
+            throw new DatabaseException("Failed to begin transaction: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 提交当前事务，并关闭事务连接。
+     */
+    public void commitTransaction() throws DatabaseException {
+        Connection conn = transactionalConnection.get();
+        if (conn == null) {
+            throw new DatabaseException("No active transaction");
+        }
+        try {
+            conn.commit();
+        } catch (SQLException e) {
+            throw new DatabaseException("Failed to commit transaction: " + e.getMessage());
+        } finally {
+            try {
+                conn.close();
+            } catch (SQLException ex) {
+                throw new DatabaseException("Failed to close transaction: " + ex.getMessage());
+            }
+            transactionalConnection.remove();
+        }
+    }
+
+    /**
+     * 回滚当前事务，并关闭事务连接。
+     */
+    public void rollbackTransaction() throws DatabaseException {
+        Connection conn = transactionalConnection.get();
+        if (conn == null) {
+            throw new DatabaseException("No active transaction");
+        }
+        try {
+            conn.rollback();
+        } catch (SQLException e) {
+            throw new DatabaseException("Failed to rollback transaction: " + e.getMessage());
+        } finally {
+            try {
+                conn.close();
+            } catch (SQLException ex) {
+                throw new DatabaseException("Failed to close transaction: " + ex.getMessage());
+            }
+            transactionalConnection.remove();
         }
     }
 
@@ -96,17 +173,102 @@ public class PostgresDBManager implements DatabaseManager {
         }
     }
 
+    // ----------------------
+    // 行级锁方法示例
+    // ----------------------
+    public Account getAccountForUpdate(String accountId) throws DatabaseException {
+        String sql = "SELECT account_id, balance FROM accounts WHERE account_id = ? FOR UPDATE";
+        Connection conn = getConnection();
+        boolean inTransaction = (transactionalConnection.get() != null);
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, accountId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    String id = rs.getString("account_id");
+                    BigDecimal balance = rs.getBigDecimal("balance");
+                    return new Account(id, balance);
+                }
+                return null;
+            }
+        } catch (SQLException e) {
+            throw new DatabaseException("getAccountForUpdate: " + e.getMessage());
+        } finally {
+            if (!inTransaction) {
+                try { conn.close(); } catch (SQLException e) { }
+            }
+        }
+    }
+    
+    public Position getPositionForUpdate(String accountId, String symbol) throws DatabaseException {
+        String sql = "SELECT quantity FROM positions WHERE account_id = ? AND symbol = ? FOR UPDATE";
+        Connection conn = getConnection();
+        boolean inTransaction = (transactionalConnection.get() != null);
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, accountId);
+            stmt.setString(2, symbol);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    BigDecimal qty = rs.getBigDecimal("quantity");
+                    return new Position(symbol, qty);
+                }
+                return null;
+            }
+        } catch (SQLException e) {
+            throw new DatabaseException("getPositionForUpdate: " + e.getMessage());
+        } finally {
+            if (!inTransaction) {
+                try { conn.close(); } catch (SQLException e) { }
+            }
+        }
+    }
+
+    public Order getOrderForUpdate(long orderId) throws DatabaseException {
+        String sql = "SELECT order_id, account_id, symbol, amount, limit_price, status, creation_time " +
+                     "FROM orders WHERE order_id = ? FOR UPDATE";
+        Connection conn = getConnection();
+        boolean inTransaction = (transactionalConnection.get() != null);
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setLong(1, orderId);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    Order order = new Order(
+                        rs.getString("account_id"),
+                        rs.getString("symbol"),
+                        rs.getBigDecimal("amount"),
+                        rs.getBigDecimal("limit_price")
+                    );
+                    order.setOrderId(rs.getLong("order_id"));
+                    order.setStatus(OrderStatus.valueOf(rs.getString("status")));
+                    order.setCreationTime(rs.getLong("creation_time"));
+                    return order;
+                }
+                return null;
+            }
+        } catch (SQLException e) {
+            throw new DatabaseException("getOrderForUpdate: " + e.getMessage());
+        } finally {
+            if (!inTransaction) {
+                try { conn.close(); } catch (SQLException e) { }
+            }
+        }
+    }
+
     @Override
     public void createAccount(String accountId, BigDecimal initialBalance) throws DatabaseException {
         String sql = "INSERT INTO accounts (account_id, balance) VALUES (?, ?)";
-        // try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-        try (Connection connection = getConnection();
-             PreparedStatement stmt = connection.prepareStatement(sql)) {
+        Connection connection = getConnection();
+        boolean inTransaction = (transactionalConnection.get() != null);
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setString(1, accountId);
             stmt.setBigDecimal(2, initialBalance);
             stmt.executeUpdate();
         } catch (SQLException e) {
             throw new DatabaseException("createAccount: " + e.getMessage());
+        }finally {
+            // 如果不在事务中，则关闭连接
+            if (!inTransaction) {
+                try { connection.close(); } catch (SQLException e) { }
+            }
         }
     }
 
@@ -114,9 +276,9 @@ public class PostgresDBManager implements DatabaseManager {
     @Override
     public Account getAccount(String accountId) throws DatabaseException {
         String sql = "SELECT account_id, balance FROM accounts WHERE account_id = ?";
-        //try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-        try (Connection connection = getConnection();
-            PreparedStatement stmt = connection.prepareStatement(sql)) {
+        Connection connection = getConnection();
+        boolean inTransaction = (transactionalConnection.get() != null);
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setString(1, accountId);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
@@ -129,30 +291,41 @@ public class PostgresDBManager implements DatabaseManager {
             }
         } catch (SQLException e) {
             throw new DatabaseException("getAccount: " + e.getMessage());
+        }finally {
+            // 如果不在事务中，则关闭连接
+            if (!inTransaction) {
+                try { connection.close(); } catch (SQLException e) { }
+            }
         }
     }
 
     @Override
     public void updateAccount(Account account) throws DatabaseException {
         String sql = "UPDATE accounts SET balance = ? WHERE account_id = ?";
-        //try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-        try (Connection connection = getConnection();
-            PreparedStatement stmt = connection.prepareStatement(sql)) {
+        Connection connection = getConnection();
+        // 判断是否在事务中
+        boolean inTransaction = (transactionalConnection.get() != null);
+        try (PreparedStatement stmt = connection.prepareStatement(sql);) {
             stmt.setBigDecimal(1, account.getBalance());
             stmt.setString(2, account.getAccountId());
             stmt.executeUpdate();
         } catch (SQLException e) {
             throw new DatabaseException("updateAccount: " + e.getMessage());
-        }
+        } finally {
+            // 如果不在事务中，则关闭连接
+            if (!inTransaction) {
+                try { connection.close(); } catch (SQLException e) { }
+            }
+       }
     }
 
     @Override
     public void createOrAddSymbol(String symbol, String accountId, BigDecimal shares) throws DatabaseException {
         // Check if positions row already exists
         String selectPos = "SELECT quantity FROM positions WHERE account_id=? AND symbol=?";
-        //try (PreparedStatement stmt = connection.prepareStatement(selectPos)) {
-        try (Connection connection = getConnection();
-            PreparedStatement stmt = connection.prepareStatement(selectPos)) {
+        Connection connection = getConnection();
+        boolean inTransaction = (transactionalConnection.get() != null);
+        try (PreparedStatement stmt = connection.prepareStatement(selectPos)) {
             stmt.setString(1, accountId);
             stmt.setString(2, symbol);
             try (ResultSet rs = stmt.executeQuery()) {
@@ -189,6 +362,11 @@ public class PostgresDBManager implements DatabaseManager {
             }
         } catch (SQLException e) {
             throw new DatabaseException("createOrAddSymbol: " + e.getMessage());
+        }finally {
+            // 如果不在事务中，则关闭连接
+            if (!inTransaction) {
+                try { connection.close(); } catch (SQLException e) { }
+            }
         }
     }
 
@@ -199,9 +377,9 @@ public class PostgresDBManager implements DatabaseManager {
     public long createOrder(Order order) throws DatabaseException {
         String sql = "INSERT INTO orders (account_id, symbol, amount, limit_price, status, creation_time) "
                 + "VALUES (?, ?, ?, ?, ?, ?) RETURNING order_id";
-        //try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-        try (Connection connection = getConnection();
-            PreparedStatement stmt = connection.prepareStatement(sql)) {
+        Connection connection = getConnection();
+        boolean inTransaction = (transactionalConnection.get() != null);
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setString(1, order.getAccountId());
             stmt.setString(2, order.getSymbol());
             stmt.setBigDecimal(3, order.getAmount());
@@ -219,6 +397,11 @@ public class PostgresDBManager implements DatabaseManager {
             }
         } catch (SQLException e) {
             throw new DatabaseException("createOrder: " + e.getMessage());
+        }finally {
+            // 如果不在事务中，则关闭连接
+            if (!inTransaction) {
+                try { connection.close(); } catch (SQLException e) { }
+            }
         }
     }
 
@@ -229,9 +412,9 @@ public class PostgresDBManager implements DatabaseManager {
     public Order getOrder(long orderId) throws DatabaseException {
         String sql = "SELECT account_id, symbol, amount, limit_price, status, creation_time "
                 + "FROM orders WHERE order_id=?";
-        //try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-        try (Connection connection = getConnection();
-            PreparedStatement stmt = connection.prepareStatement(sql)) {
+        Connection connection = getConnection();
+        boolean inTransaction = (transactionalConnection.get() != null);
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setLong(1, orderId);
             try (ResultSet rs = stmt.executeQuery()) {
                 if (rs.next()) {
@@ -250,6 +433,11 @@ public class PostgresDBManager implements DatabaseManager {
             }
         } catch (SQLException e) {
             throw new DatabaseException("getOrder: " + e.getMessage());
+        }finally {
+            // 如果不在事务中，则关闭连接
+            if (!inTransaction) {
+                try { connection.close(); } catch (SQLException e) { }
+            }
         }
     }
 
@@ -261,9 +449,9 @@ public class PostgresDBManager implements DatabaseManager {
         String sql = "UPDATE orders "
                 + "SET account_id=?, symbol=?, amount=?, limit_price=?, status=?, creation_time=? "
                 + "WHERE order_id=?";
-        //try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-        try (Connection connection = getConnection();
-            PreparedStatement stmt = connection.prepareStatement(sql)) {
+        Connection connection = getConnection();
+        boolean inTransaction = (transactionalConnection.get() != null);
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setString(1, order.getAccountId());
             stmt.setString(2, order.getSymbol());
             stmt.setBigDecimal(3, order.getAmount());
@@ -274,7 +462,12 @@ public class PostgresDBManager implements DatabaseManager {
             stmt.executeUpdate();
         } catch (SQLException e) {
             throw new DatabaseException("updateOrder: " + e.getMessage());
-        }
+        }finally {
+            // 如果不在事务中，则关闭连接
+            if (!inTransaction) {
+                try { connection.close(); } catch (SQLException e) { }
+            }
+       }
     }
 
     /**
@@ -295,9 +488,9 @@ public class PostgresDBManager implements DatabaseManager {
                 + orderByClause;
 
         List<Order> list = new ArrayList<>();
-        //try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-        try (Connection connection = getConnection();
-            PreparedStatement stmt = connection.prepareStatement(sql)) {
+        Connection connection = getConnection();
+        boolean inTransaction = (transactionalConnection.get() != null);
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setString(1, symbol);
             stmt.setBoolean(2, isBuySide);
             stmt.setBoolean(3, isBuySide);
@@ -316,6 +509,11 @@ public class PostgresDBManager implements DatabaseManager {
             }
         } catch (SQLException e) {
             throw new DatabaseException("getOpenOrdersForSymbol: " + e.getMessage());
+        }finally {
+            // 如果不在事务中，则关闭连接
+            if (!inTransaction) {
+                try { connection.close(); } catch (SQLException e) { }
+            }
         }
         return list;
     }
@@ -327,9 +525,9 @@ public class PostgresDBManager implements DatabaseManager {
     public void insertExecution(long orderId, BigDecimal shares, BigDecimal price, long timestamp)
             throws DatabaseException {
         String sql = "INSERT INTO executions (order_id, shares, price, exec_time) VALUES (?, ?, ?, ?)";
-        //try (PreparedStatement ps = connection.prepareStatement(sql)) {
-        try (Connection connection = getConnection();
-            PreparedStatement ps = connection.prepareStatement(sql)) {
+        Connection connection = getConnection();
+        boolean inTransaction = (transactionalConnection.get() != null);
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
             ps.setLong(1, orderId);
             ps.setBigDecimal(2, shares);
             ps.setBigDecimal(3, price);
@@ -337,6 +535,11 @@ public class PostgresDBManager implements DatabaseManager {
             ps.executeUpdate();
         } catch (SQLException e) {
             throw new DatabaseException("insertExecution: " + e.getMessage());
+        }finally {
+            // 如果不在事务中，则关闭连接
+            if (!inTransaction) {
+                try { connection.close(); } catch (SQLException e) { }
+            }
         }
     }
 
@@ -346,9 +549,9 @@ public class PostgresDBManager implements DatabaseManager {
     @Override
     public BigDecimal getTotalExecutedShares(long orderId) throws DatabaseException {
         String sql = "SELECT COALESCE(SUM(shares), 0) AS total_filled FROM executions WHERE order_id=?";
-        //try (PreparedStatement ps = connection.prepareStatement(sql)) {
-        try (Connection connection = getConnection();
-            PreparedStatement ps = connection.prepareStatement(sql)) {
+        Connection connection = getConnection();
+        boolean inTransaction = (transactionalConnection.get() != null);
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
             ps.setLong(1, orderId);
             try (ResultSet rs = ps.executeQuery()) {
                 if (rs.next()) {
@@ -358,6 +561,11 @@ public class PostgresDBManager implements DatabaseManager {
             }
         } catch (SQLException e) {
             throw new DatabaseException("getTotalExecutedShares: " + e.getMessage());
+        }finally {
+            // 如果不在事务中，则关闭连接
+            if (!inTransaction) {
+                try { connection.close(); } catch (SQLException e) { }
+            }
         }
     }
 
@@ -373,9 +581,9 @@ public class PostgresDBManager implements DatabaseManager {
                 + "ORDER BY exec_time ASC";
 
         List<QueryResult.ExecutionRecord> result = new ArrayList<>();
-        // try (PreparedStatement ps = connection.prepareStatement(sql)) {
-        try (Connection connection = getConnection();
-            PreparedStatement ps = connection.prepareStatement(sql)) {
+        Connection connection = getConnection();
+        boolean inTransaction = (transactionalConnection.get() != null);
+        try (PreparedStatement ps = connection.prepareStatement(sql)) {
             ps.setLong(1, orderId);
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
@@ -387,6 +595,11 @@ public class PostgresDBManager implements DatabaseManager {
             }
         } catch (SQLException e) {
             throw new DatabaseException("getExecutionsForOrder: " + e.getMessage());
+        }finally {
+            // 如果不在事务中，则关闭连接
+            if (!inTransaction) {
+                try { connection.close(); } catch (SQLException e) { }
+            }
         }
         return result;
     }
@@ -394,9 +607,9 @@ public class PostgresDBManager implements DatabaseManager {
     // Get position:
     public Position getPosition(String accountId, String symbol) throws DatabaseException {
         String sql = "SELECT quantity FROM positions WHERE account_id=? AND symbol=?";
-        //try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-        try (Connection connection = getConnection();
-            PreparedStatement stmt = connection.prepareStatement(sql)) {
+        Connection connection = getConnection();
+        boolean inTransaction = (transactionalConnection.get() != null);
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setString(1, accountId);
             stmt.setString(2, symbol);
             try (ResultSet rs = stmt.executeQuery()) {
@@ -409,20 +622,30 @@ public class PostgresDBManager implements DatabaseManager {
             }
         } catch (SQLException e) {
             throw new DatabaseException("getPosition: " + e.getMessage());
+        }finally {
+            // 如果不在事务中，则关闭连接
+            if (!inTransaction) {
+                try { connection.close(); } catch (SQLException e) { }
+            }
         }
     }
 
     public void updatePosition(String accountId, String symbol, BigDecimal newQuantity) throws DatabaseException {
         String sql = "UPDATE positions SET quantity=? WHERE account_id=? AND symbol=?";
-        //try (PreparedStatement stmt = connection.prepareStatement(sql)) {
-        try (Connection connection = getConnection();
-            PreparedStatement stmt = connection.prepareStatement(sql)) {
+        Connection connection = getConnection();
+        boolean inTransaction = (transactionalConnection.get() != null);
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
             stmt.setBigDecimal(1, newQuantity);
             stmt.setString(2, accountId);
             stmt.setString(3, symbol);
             stmt.executeUpdate();
         } catch (SQLException e) {
             throw new DatabaseException("updatePosition: " + e.getMessage());
+        }finally {
+            // 如果不在事务中，则关闭连接
+            if (!inTransaction) {
+                try { connection.close(); } catch (SQLException e) { }
+            }
         }
     }
 }

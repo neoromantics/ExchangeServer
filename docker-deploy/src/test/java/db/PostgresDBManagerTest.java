@@ -12,8 +12,6 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
-import com.zaxxer.hikari.HikariConfig;
-import com.zaxxer.hikari.HikariDataSource;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -27,16 +25,16 @@ public class PostgresDBManagerTest {
 
     @BeforeEach
     public void setUp() throws DatabaseException {
-        // dbManager = new PostgresDBManager();
+        dbManager = new PostgresDBManager();
         // 配置连接池参数
-        HikariConfig config = new HikariConfig();
-        config.setJdbcUrl("jdbc:postgresql://localhost:5432/exchange_test");
-        config.setUsername("myuser");
-        config.setPassword("mypassword");
-        // 也可以设置其他参数，如连接池大小、超时时间等
-        config.setMaximumPoolSize(10);
+        // HikariConfig config = new HikariConfig();
+        // config.setJdbcUrl("jdbc:postgresql://localhost:5432/exchange_test");
+        // config.setUsername("myuser");
+        // config.setPassword("mypassword");
+        // // 也可以设置其他参数，如连接池大小、超时时间等
+        // config.setMaximumPoolSize(10);
         
-        dbManager = new PostgresDBManager(new HikariDataSource(config));
+        //dbManager = new PostgresDBManager(new HikariDataSource(config));
 
         dbManager.connect();
         clearTables();

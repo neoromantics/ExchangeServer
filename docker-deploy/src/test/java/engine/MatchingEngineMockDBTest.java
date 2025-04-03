@@ -17,6 +17,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
 public class MatchingEngineMockDBTest {
@@ -42,6 +44,9 @@ public class MatchingEngineMockDBTest {
         String accountId = "buyer1";
         BigDecimal initialBalance = new BigDecimal("10000.00");
         Account buyerAccount = new Account(accountId, initialBalance);
+        // 修改：对 getAccountForUpdate 进行 stubbing
+        when(mockDb.getAccountForUpdate(accountId)).thenReturn(buyerAccount);
+        // 同时保留 getAccount 的 stubbing（部分回调中可能用到）
         when(mockDb.getAccount(accountId)).thenReturn(buyerAccount);
 
         // No matching SELL orders: return empty list.
@@ -83,6 +88,9 @@ public class MatchingEngineMockDBTest {
         // Setup buyer's account.
         String buyerId = "buyer1";
         Account buyerAccount = new Account(buyerId, new BigDecimal("10000.00"));
+        // 对 openOrder 调用 getAccountForUpdate 进行 stubbing
+        when(mockDb.getAccountForUpdate(buyerId)).thenReturn(buyerAccount);
+        // 同时保留 getAccount 的 stubbing，用于后续部分退款逻辑
         when(mockDb.getAccount(buyerId)).thenReturn(buyerAccount);
 
         // Setup seller's account and position.
@@ -112,11 +120,6 @@ public class MatchingEngineMockDBTest {
         // Ensure getOrder returns buyer order for later query.
         when(mockDb.getOrder(1L)).thenReturn(buyOrder);
 
-        // Capture calls to insertExecution.
-        ArgumentCaptor<BigDecimal> sharesCaptor = ArgumentCaptor.forClass(BigDecimal.class);
-        ArgumentCaptor<BigDecimal> priceCaptor = ArgumentCaptor.forClass(BigDecimal.class);
-        ArgumentCaptor<Long> timeCaptor = ArgumentCaptor.forClass(Long.class);
-
         // Execute openOrder.
         Order placedBuyOrder = engine.openOrder(buyOrder);
 
@@ -127,6 +130,9 @@ public class MatchingEngineMockDBTest {
         assertEquals(0, buyerAccount.getBalance().compareTo(new BigDecimal("5250.00")));
 
         // Verify that insertExecution was called twice (for seller and buyer).
+        ArgumentCaptor<BigDecimal> sharesCaptor = ArgumentCaptor.forClass(BigDecimal.class);
+        ArgumentCaptor<BigDecimal> priceCaptor = ArgumentCaptor.forClass(BigDecimal.class);
+        ArgumentCaptor<Long> timeCaptor = ArgumentCaptor.forClass(Long.class);
         verify(mockDb, times(2)).insertExecution(anyLong(), sharesCaptor.capture(), priceCaptor.capture(), timeCaptor.capture());
         for (BigDecimal matchedShares : sharesCaptor.getAllValues()) {
             assertEquals(0, matchedShares.compareTo(new BigDecimal("50")));
@@ -161,6 +167,7 @@ public class MatchingEngineMockDBTest {
         String buyerId = "buyer1";
         // Assume the buyer's balance is 5200 after a partial fill.
         Account buyerAccount = new Account(buyerId, new BigDecimal("5200.00"));
+        // cancelOrder 调用 getAccount，所以保持 getAccount 的 stubbing
         when(mockDb.getAccount(buyerId)).thenReturn(buyerAccount);
 
         // Create the buyer order: Buy 100 shares at limit 50.
@@ -168,11 +175,12 @@ public class MatchingEngineMockDBTest {
         buyOrder.setStatus(OrderStatus.OPEN);
         buyOrder.setCreationTime(2000L);
         when(mockDb.createOrder(buyOrder)).thenReturn(1L);
-        // Ensure getOrder returns the buyer order.
+        // For cancelOrder, engine 调用 getOrderForUpdate，所以需要 stubbing
+        when(mockDb.getOrderForUpdate(1L)).thenReturn(buyOrder);
+        // 同时保证 getOrder 返回该订单
         when(mockDb.getOrder(1L)).thenReturn(buyOrder);
 
         // Simulate that 40 shares have already been executed.
-        // So getTotalExecutedShares returns 40.
         when(mockDb.getTotalExecutedShares(1L)).thenReturn(new BigDecimal("40"));
 
         // Cancellation: Leftover = 100 - 40 = 60 shares.
@@ -189,7 +197,9 @@ public class MatchingEngineMockDBTest {
      */
     @Test
     public void testOpenOrderAccountNotFound() throws DatabaseException {
-        // Simulate that getAccount returns null for a non-existent account.
+        // 修改：对 getAccountForUpdate 返回 null
+        when(mockDb.getAccountForUpdate("nonexistent")).thenReturn(null);
+        // 保留 getAccount stubbing（若后续调用）
         when(mockDb.getAccount("nonexistent")).thenReturn(null);
 
         Order order = new Order("nonexistent", "XYZ", new BigDecimal("100"), new BigDecimal("50.00"));
@@ -210,6 +220,7 @@ public class MatchingEngineMockDBTest {
         String buyerId = "buyer_insufficient";
         // Account has only 1000, but 100 shares at limit 50 require 5000.
         Account buyerAccount = new Account(buyerId, new BigDecimal("1000.00"));
+        when(mockDb.getAccountForUpdate(buyerId)).thenReturn(buyerAccount);
         when(mockDb.getAccount(buyerId)).thenReturn(buyerAccount);
 
         Order order = new Order(buyerId, "XYZ", new BigDecimal("100"), new BigDecimal("50.00"));
@@ -229,6 +240,7 @@ public class MatchingEngineMockDBTest {
     public void testOpenOrderInsufficientShares() throws DatabaseException {
         String sellerId = "seller_insufficient";
         Account sellerAccount = new Account(sellerId, new BigDecimal("5000.00"));
+        when(mockDb.getAccountForUpdate(sellerId)).thenReturn(sellerAccount);
         when(mockDb.getAccount(sellerId)).thenReturn(sellerAccount);
         // Simulate that no position exists or not enough shares.
         when(mockDb.getPosition(sellerId, "XYZ")).thenReturn(null);
@@ -257,6 +269,8 @@ public class MatchingEngineMockDBTest {
         order.setStatus(OrderStatus.EXECUTED);
         order.setCreationTime(Instant.now().getEpochSecond());
         when(mockDb.createOrder(order)).thenReturn(1L);
+        // cancelOrder 需要 getOrderForUpdate stubbing
+        when(mockDb.getOrderForUpdate(1L)).thenReturn(order);
         when(mockDb.getOrder(1L)).thenReturn(order);
 
         MatchingEngineException exception = assertThrows(MatchingEngineException.class,
@@ -296,6 +310,7 @@ public class MatchingEngineMockDBTest {
         // Setup buyer's account.
         String buyerId = "buyer2";
         Account buyerAccount = new Account(buyerId, new BigDecimal("10000.00"));
+        when(mockDb.getAccountForUpdate(buyerId)).thenReturn(buyerAccount);
         when(mockDb.getAccount(buyerId)).thenReturn(buyerAccount);
 
         // Setup seller's account and position.
@@ -330,8 +345,7 @@ public class MatchingEngineMockDBTest {
         Order placedBuyerOrder = engine.openOrder(buyerOrder);
 
         // At this point, our matching logic should have fully matched the buyer order.
-        // However, our mock doesn't automatically record executions.
-        // Need to simulate that 100 shares were executed.
+        // Simulate that 100 shares were executed.
         List<QueryResult.ExecutionRecord> buyerExecs = new ArrayList<>();
         buyerExecs.add(new QueryResult.ExecutionRecord(new BigDecimal("100"), new BigDecimal("45.00"), Instant.now().getEpochSecond()));
         when(mockDb.getExecutionsForOrder(5L)).thenReturn(buyerExecs);
@@ -375,6 +389,7 @@ public class MatchingEngineMockDBTest {
         // Setup buyer account.
         String buyerId = "buyerMulti";
         Account buyerAccount = new Account(buyerId, new BigDecimal("10000.00"));
+        when(mockDb.getAccountForUpdate(buyerId)).thenReturn(buyerAccount);
         when(mockDb.getAccount(buyerId)).thenReturn(buyerAccount);
 
         // Setup seller order 1 (older): Sell 100 shares at limit 45.
@@ -453,6 +468,7 @@ public class MatchingEngineMockDBTest {
     public void testNoMatchDueToPriceIncompatibility() throws DatabaseException, MatchingEngineException {
         String buyerId = "buyer3";
         Account buyerAccount = new Account(buyerId, new BigDecimal("10000.00"));
+        when(mockDb.getAccountForUpdate(buyerId)).thenReturn(buyerAccount);
         when(mockDb.getAccount(buyerId)).thenReturn(buyerAccount);
 
         // Seller order: Sell 100 shares at limit 45.
@@ -497,8 +513,7 @@ public class MatchingEngineMockDBTest {
      * - Seller order: Sell 100 shares at limit 40.
      * - Buyer order: Buy 100 shares at limit 45 (older order).
      * Expected:
-     * - For SELL order, matched shares = 100, execution price = buyer's limit (if buyer is older) or seller's limit (if seller is older).
-     *   Let's assume seller is older (creationTime 1000L vs. buyer at 2000L), so execPrice = 40.
+     * - For SELL order, matched shares = 100, execution price = seller's limit = 40.
      * - Seller's payout = 100 * 40 = 4000.
      * - Final seller balance = initial balance + 4000.
      * - SELL order becomes fully EXECUTED (openShares = 0).
@@ -508,6 +523,7 @@ public class MatchingEngineMockDBTest {
         // Setup seller's account.
         String sellerId = "seller4";
         Account sellerAccount = new Account(sellerId, new BigDecimal("1000.00"));
+        when(mockDb.getAccountForUpdate(sellerId)).thenReturn(sellerAccount);
         when(mockDb.getAccount(sellerId)).thenReturn(sellerAccount);
         Position sellerPos = new Position("XYZ", new BigDecimal("300"));
         when(mockDb.getPosition(sellerId, "XYZ")).thenReturn(sellerPos);
@@ -572,6 +588,7 @@ public class MatchingEngineMockDBTest {
         Position initialPos = new Position("XYZ", new BigDecimal("200"));
         Account sellerAccount = new Account(sellerId, new BigDecimal("0.00"));
         when(mockDb.getAccount(sellerId)).thenReturn(sellerAccount);
+        when(mockDb.getAccountForUpdate(sellerId)).thenReturn(sellerAccount);
         when(mockDb.getPosition(sellerId, "XYZ")).thenReturn(initialPos);
 
         // Create SELL order: Sell 100 shares at limit 40.
@@ -579,6 +596,8 @@ public class MatchingEngineMockDBTest {
         sellOrder.setStatus(OrderStatus.OPEN);
         sellOrder.setCreationTime(1000L);
         when(mockDb.createOrder(sellOrder)).thenReturn(13L);
+        // For cancelOrder, stub getOrderForUpdate.
+        when(mockDb.getOrderForUpdate(13L)).thenReturn(sellOrder);
         when(mockDb.getOrder(13L)).thenReturn(sellOrder);
 
         // Simulate that 30 shares have been executed.
@@ -621,6 +640,7 @@ public class MatchingEngineMockDBTest {
         // Setup buyer's account with a higher balance.
         String buyerId = "buyerMulti";
         Account buyerAccount = new Account(buyerId, new BigDecimal("15000.00"));
+        when(mockDb.getAccountForUpdate(buyerId)).thenReturn(buyerAccount);
         when(mockDb.getAccount(buyerId)).thenReturn(buyerAccount);
 
         // Setup three seller orders.
@@ -714,6 +734,7 @@ public class MatchingEngineMockDBTest {
         String buyerId = "buyerNoExec";
         // Initial balance: 8000.
         Account buyerAccount = new Account(buyerId, new BigDecimal("8000.00"));
+        when(mockDb.getAccountForUpdate(buyerId)).thenReturn(buyerAccount);
         when(mockDb.getAccount(buyerId)).thenReturn(buyerAccount);
 
         // Create buyer order: Buy 100 shares at limit 60.
@@ -721,7 +742,7 @@ public class MatchingEngineMockDBTest {
         buyOrder.setStatus(OrderStatus.OPEN);
         buyOrder.setCreationTime(Instant.now().getEpochSecond());
         when(mockDb.createOrder(buyOrder)).thenReturn(30L);
-        when(mockDb.getOrder(30L)).thenReturn(buyOrder);
+        when(mockDb.getOrderForUpdate(30L)).thenReturn(buyOrder);
 
         // First, open the order, so funds are deducted.
         Order openedOrder = engine.openOrder(buyOrder);
@@ -736,5 +757,4 @@ public class MatchingEngineMockDBTest {
         assertEquals(OrderStatus.CANCELED, canceledOrder.getStatus());
         assertEquals(0, buyerAccount.getBalance().compareTo(new BigDecimal("8000.00")));
     }
-
 }

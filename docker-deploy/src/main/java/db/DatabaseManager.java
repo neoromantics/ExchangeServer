@@ -13,6 +13,14 @@ public interface DatabaseManager {
     void connect() throws DatabaseException;
     void disconnect() throws DatabaseException;
 
+    void beginTransaction() throws DatabaseException;
+    void commitTransaction() throws DatabaseException;
+    void rollbackTransaction() throws DatabaseException;
+
+    Account getAccountForUpdate(String accountId) throws DatabaseException;
+    Position getPositionForUpdate(String accountId, String symbol) throws DatabaseException;
+    Order getOrderForUpdate(long orderId) throws DatabaseException;
+
     void createAccount(String accountId, BigDecimal initialBalance) throws DatabaseException;
     Account getAccount(String accountId) throws DatabaseException;
     void updateAccount(Account account) throws DatabaseException;
